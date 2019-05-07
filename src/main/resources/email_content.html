@@ -1,0 +1,38 @@
+<html>
+	<head>
+	<style>
+	table {
+	    border-collapse: collapse;
+	    width: 100%;
+	}
+	
+	td, th {
+	    border: 1px solid #dddddd;
+	    text-align: left;
+	    padding: 8px;
+	     overflow: hidden; 
+        white-space: nowrap;
+	   
+	}
+	
+	</style>
+	</head>
+	<body>
+		<table id='content-table'/>
+		#[
+		
+			String rows = "";
+			rows += "<tr><th>Table Name</th><th>Duration</th><th>Error Description</th></tr>";
+			for(int i = 0; i < payload.size(); i++) {
+				rows += "<tr>";
+				rows += "<td>" + payload[i]['tablename'] + "</td>";
+				rows += "<td>" + payload[i]['duration'] + "</td>";
+				rows += "<td id=\"error-description\">" + payload[i]['error'] + "</td>";
+				rows += "</tr>"
+			}
+			return rows;
+		
+		]
+		
+	</body>
+</html>

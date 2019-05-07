@@ -1,0 +1,17 @@
+<html>
+	<body>
+		<table id='content-table' border=4/>
+		
+		<script>
+			var rows = '';
+			rows +='<tr><th>Table Name</th><th>Error Description</th><th>Duration</th></tr>'
+			for( var i = 0; i <= #[payload.size()]; i++ )
+			{
+				rows += '<tr id = "row' + i + '"><td>Table 1</td><td>Error</td><td>10</td></tr>';
+			}
+			document.getElementById( 'content-table' ).innerHTML = rows;
+		
+		</script>
+		
+	</body>
+</html>

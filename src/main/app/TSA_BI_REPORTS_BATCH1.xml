@@ -1,0 +1,750 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:smtp="http://www.mulesoft.org/schema/mule/smtp"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:quartz="http://www.mulesoft.org/schema/mule/quartz"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/smtp http://www.mulesoft.org/schema/mule/smtp/current/mule-smtp.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/quartz http://www.mulesoft.org/schema/mule/quartz/current/mule-quartz.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+	
+    <db:generic-config name="TSA_Select_Database_Configuration"   doc:name="Generic Database Configuration" dataSource-ref="mtc1DataSource">
+     	<reconnect count="50"/>
+    </db:generic-config>
+    <db:generic-config name="TSA_Insert_Database_Configuration"   doc:name="Generic Database Configuration" dataSource-ref="biDataSource">
+        <reconnect count="50"/>
+    </db:generic-config>
+    <db:generic-config name="TSA_eLearning_Select_Database_Configuration"   doc:name="Generic Database Configuration" dataSource-ref="SabaDataSource">
+        <reconnect count="50"/>
+    </db:generic-config>
+    <file:connector name="File" autoDelete="true" streaming="false" validateConnections="true" doc:name="File"/>
+    <db:mysql-config name="MySQL_Configuration"  doc:name="MySQL Configuration" dataSource-ref="mtc2DataSource"/>
+    <spring:beans>
+        <spring:bean id="mtc1DataSource" name="mtc1DataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+            <spring:property name="maxPoolSize" value="50"/>
+            <spring:property name="driverClass" value="com.microsoft.sqlserver.jdbc.SQLServerDriver"/>
+            <spring:property name="maxStatements" value="40"/>
+            <spring:property name="testConnectionOnCheckout" value="true"/>
+            <spring:property name="testConnectionOnCheckin" value="true"/>
+            <spring:property name="jdbcUrl" value="${jdbc.d.select.url}"/>
+            <spring:property name="user" value="${jdbc.d.select.username}"/>
+            <spring:property name="password" value="${jdbc.d.select.password}"/>
+            <spring:property name="minPoolSize" value="5"/>
+        </spring:bean>
+        <spring:bean id="SabaDataSource" name="SabaDataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+            <spring:property name="driverClass" value="com.microsoft.sqlserver.jdbc.SQLServerDriver"/>
+            <spring:property name="testConnectionOnCheckout" value="true"/>
+            <spring:property name="minPoolSize" value="5"/>
+            <spring:property name="maxPoolSize" value="20"/>
+            <spring:property name="testConnectionOnCheckin" value="true"/>
+            <spring:property name="jdbcUrl" value="${jdbc.d.select.UAT.url}"/>
+            <spring:property name="user" value="${jdbc.d.select.UAT.username}"/>
+            <spring:property name="password" value="${jdbc.d.select.UAT.password}"/>
+            <spring:property name="maxStatements" value="18"/>
+        </spring:bean>
+        <spring:bean id="biDataSource" name="biDataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+            <spring:property name="maxPoolSize" value="30"/>
+            <spring:property name="maxStatements" value="28"/>
+            <spring:property name="testConnectionOnCheckin" value="true"/>
+            <spring:property name="driverClass" value="com.microsoft.sqlserver.jdbc.SQLServerDriver"/>
+            <spring:property name="jdbcUrl" value="${jdbc.d.insert.url}"/>
+            <spring:property name="user" value="${jdbc.d.insert.username}"/>
+            <spring:property name="password" value="${jdbc.d.insert.password}"/>
+            <spring:property name="minPoolSize" value="5"/>
+            <spring:property name="testConnectionOnCheckout" value="true"/>
+        </spring:bean>
+        <spring:bean id="mtc2DataSource" name="mtc2DataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+            <spring:property name="jdbcUrl" value="${jdbc.d.select.MTC2.url}"/>
+            <spring:property name="user" value="${jdbc.d.select.MTC2.username}"/>
+            <spring:property name="password" value="${jdbc.d.select.MTC2.password}"/>
+            <spring:property name="maxPoolSize" value="10"/>
+            <spring:property name="minPoolSize" value="5"/>
+            <spring:property name="testConnectionOnCheckin" value="true"/>
+            <spring:property name="maxStatements" value="10"/>
+            <spring:property name="driverClass" value="com.mysql.jdbc.Driver"/>
+            <spring:property name="testConnectionOnCheckout" value="true"/>
+        </spring:bean>
+    </spring:beans>
+    <smtp:connector name="SMTP" contentType="text/html" validateConnections="true" doc:name="SMTP"/>
+    <flow name="tsa_db_batch1_insertionFlow">
+        <file:inbound-endpoint path="${tsa.file.location}"  connector-ref="File" responseTimeout="10000" doc:name="File"/>
+        	<!-- <quartz:inbound-endpoint jobName="TSADBINSERT"  repeatInterval="86399971" 
+        	 responseTimeout="10000" doc:name="TSADBINSERT Job" repeatCount="0">
+            <quartz:event-generator-job/>
+        </quartz:inbound-endpoint> -->
+        <logger message="=======job started====== " level="INFO" doc:name="Logger"/>
+        <db:select config-ref="TSA_Insert_Database_Configuration" doc:name="get_Flow_start_count">
+            <db:parameterized-query><![CDATA[select count(*) as flowStartCount from T_TSA_FLOW_LOG where FlowName = 'tsa_db_batch1_insertionFlow' and STATUS = 'started']]></db:parameterized-query>
+        </db:select>
+        <choice doc:name="Choice">
+            <when expression="#[payload.get(0).flowStartCount &gt; 0]">
+                <logger level="INFO" doc:name="Logger" message="Flow is already running hence exiting from this flowRun."/>
+            </when>
+            <otherwise>
+                <db:select config-ref="TSA_Insert_Database_Configuration" doc:name="get_RunId_for_flow">
+            <db:parameterized-query><![CDATA[SELECT NEXT VALUE FOR dbo.seq_flow AS flowRunID]]></db:parameterized-query>
+        </db:select>
+        <set-variable variableName="flowRunID" value="#[payload.get(0).flowRunID]" doc:name="flowRunID"/>
+        <db:select config-ref="TSA_Insert_Database_Configuration" doc:name="get_RunId_for_table">
+            <db:parameterized-query><![CDATA[select NEXT VALUE FOR dbo.seq_tables AS tableRunID]]></db:parameterized-query>
+        </db:select>
+        <set-variable variableName="tableRunID" value="#[payload.get(0).tableRunID]" doc:name="tableRunID"/>
+        <choice doc:name="Choice">
+            <when expression="#[server.dateTime.getDayOfWeek() == 7]">
+                <set-variable variableName="runMode" value="#['W']" doc:name="runMode"/>
+            </when>
+            <otherwise>
+                <set-variable variableName="runMode" value="#['D']" doc:name="runMode"/>
+            </otherwise>
+        </choice>
+        <db:insert config-ref="TSA_Insert_Database_Configuration" doc:name="insert_into_log_table">
+            <db:parameterized-query><![CDATA[INSERT INTO T_TSA_FLOW_LOG(RunID,FlowName,Status,FlowStartDate,RunMode) VALUES(#[flowVars.flowRunID],'tsa_db_batch1_insertionFlow','started',getDate(),#[flowVars.runMode])]]></db:parameterized-query>
+        </db:insert>
+                <db:delete config-ref="TSA_Insert_Database_Configuration" doc:name="Database">
+                    <db:parameterized-query><![CDATA[delete from T_DIM_BI_EXTRACT where DestinationTable='T_FACT_FORECAST']]></db:parameterized-query>
+                </db:delete>
+                <db:select config-ref="TSA_Select_Database_Configuration" doc:name="bi_extract_source_select">
+                    <db:dynamic-query><![CDATA[SELECT [SelectTable]
+      ,[DestinationTable]
+      ,[HotelID]
+      ,[KeyIdentifier]
+      ,[DateParam]
+      ,[CompletionFlag]
+      ,[CompletedDate]
+      ,[CreatedDate]
+  FROM [T_DIM_BI_EXTRACT] WHERE CompletionFlag=0 and DestinationTable='T_FACT_FORECAST']]></db:dynamic-query>
+                </db:select>
+               <!--  <logger message="paylaod ::: #[payload].......#[payload.SelectTable]" level="INFO" doc:name="Logger"/>
+                --> <db:insert config-ref="TSA_Insert_Database_Configuration" doc:name="bi_extract_reports_insert" bulkMode="true">
+                    <db:parameterized-query><![CDATA[INSERT into T_DIM_BI_EXTRACT ( [SelectTable]
+      ,[DestinationTable]
+      ,[HotelID]
+      ,[KeyIdentifier]
+      ,[DateParam]
+      ,[CompletionFlag]
+      ,[CompletedDate]
+      ,[CreatedDate])
+VALUES (  #[payload.SelectTable]
+      ,#[payload.DestinationTable]
+      ,#[payload.HotelID]
+      ,#[payload.KeyIdentifier]
+      ,#[payload.DateParam]
+      ,#[payload.CompletionFlag]
+      ,#[payload.CompletedDate]
+      ,#[payload.CreatedDate])]]></db:parameterized-query>
+                </db:insert>
+                <db:select config-ref="TSA_Insert_Database_Configuration" doc:name="set_extract_max_createddate">
+                    <db:parameterized-query><![CDATA[SELECT MAX(CreatedDate) AS maxCreatedDate FROM [T_DIM_BI_EXTRACT] WHERE destinationtable in ('T_FACT_FORECAST')]]></db:parameterized-query>
+                </db:select>
+                <set-variable variableName="maxCreatedDateInExctractTable" value="#[payload.get(0).maxCreatedDate]" doc:name="maxCreatedDateInExctractTables"/>
+   		<component class="tsa_bi_reports.ReadPropertiesFile" doc:name="readPropertiesFile"/>
+            </otherwise>
+        </choice>
+    </flow>
+    <flow name="tsa_db_insertionFlow1">
+        <vm:inbound-endpoint exchange-pattern="one-way" path="TSADB" doc:name="VM"/>
+        <set-variable variableName="count" value="#[payload.count]" doc:name="count"/>
+        <set-variable variableName="insertTable" value="#[payload.insertTable]" doc:name="insertTableName"/>
+        <set-variable variableName="selectQuery" value="#[payload.selectQuery]" doc:name="selectQuery"/>
+        <set-variable variableName="dateParam" value="#[payload.dateParam]" doc:name="dateParam"/>
+        <set-variable variableName="dataType" value="#[payload.dataType]" doc:name="dataType"/>
+        <set-variable variableName="operationtype" value="#[payload.operationtype]" doc:name="operationtype"/>
+        <set-variable variableName="limit" value="${tsa.query.limit}" doc:name="limit"/>
+        <set-variable variableName="offset" value="#[0]" doc:name="offset"/>
+        <set-variable variableName="flowRunID" value="#[payload.flowRunID]" doc:name="flowRunID"/>
+        <set-variable variableName="tableRunID" value="#[payload.tableRunID]" doc:name="tableRunID"/>
+        <set-variable variableName="jobRunWeekly" value="#[payload.jobRunWeekly]" doc:name="DayOfJobRunWeekly"/>
+        <set-variable variableName="tableType" value="#[payload.tableType]" doc:name="tableType"/>
+        <set-variable variableName="dataBaseType" value="#[payload.dataBaseType]" doc:name="dataBaseType"/>
+        <set-variable variableName="maxCreatedDateInExctractTable" value="#[payload.maxCreatedDateInExctractTable]" doc:name="maxCreatedDateInExctractTable"/>
+        <choice doc:name="Choice">
+            <when expression="#[flowVars.tableType.equalsIgnoreCase('FACTTABLE')]">
+                <set-variable variableName="getDeleteQuery" value="#[payload.deleteQueryForFact]" doc:name="getDeleteQuery"/>
+                <db:select config-ref="TSA_Insert_Database_Configuration" doc:name="get_FAct_Run_Offset">
+                    <db:parameterized-query><![CDATA[select *  from  T_TSA_DB_CONFIG_PARAM]]></db:parameterized-query>
+                </db:select>
+                <set-variable variableName="runOffset" value="#[payload[0]]" doc:name="GetRunOffset"/>
+                <db:select config-ref="TSA_Insert_Database_Configuration" doc:name="Database">
+                    <db:parameterized-query><![CDATA[select Count(*) as tableCount  from  T_TSA_FLOW_DTL_LOG where TableName = #[flowVars.insertTable] AND Status='completed']]></db:parameterized-query>
+                </db:select>
+                <component class="tsa_bi_reports.GetDateRangeForFactTables" doc:name="Java"/>
+                <logger message="Delete table :: #[flowVars.deleteData]" level="INFO" doc:name="Logger"/>
+                <choice doc:name="Choice">
+                    <when expression="#[flowVars.deleteData &gt; 0]">
+                        <db:delete config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="delete_data_byExrtract_Date">
+                            <db:dynamic-query><![CDATA[#[flowVars.deleteQuery]]]></db:dynamic-query>
+                        </db:delete>
+                        <logger message="Record deleted for Fact table :  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+                    </when>
+                    <otherwise>
+                        <logger message="---First time insertion in fact table #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+                    </otherwise>
+                </choice>
+            </when>
+            <otherwise>
+                <db:select config-ref="TSA_Insert_Database_Configuration" doc:name="get_RunIdOf_completed_Run">
+                    <db:parameterized-query><![CDATA[select max(RunID) as RunID from T_TSA_FLOW_DTL_LOG where TableName = #[flowVars.insertTable] AND STATUS='completed']]></db:parameterized-query>
+                </db:select>
+                <db:select config-ref="TSA_Insert_Database_Configuration" doc:name="get_last_insertedDate">
+                    <db:parameterized-query><![CDATA[SELECT EndDate FROM T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable] AND RunID = #[payload[0].RunID]]]></db:parameterized-query>
+                </db:select>
+                <logger message="last_insertedDate:#[payload]" level="INFO" doc:name="Logger"/>
+                <component class="tsa_bi_reports.GetLastInsertedDate" doc:name="Java"/>
+            </otherwise>
+        </choice>
+        <logger message="select query : #[flowVars.selectQuery]" level="INFO" doc:name="Logger"/>
+        <db:insert config-ref="TSA_Insert_Database_Configuration" doc:name="insert_into_logTable">
+            <db:parameterized-query><![CDATA[INSERT INTO T_TSA_FLOW_DTL_LOG(FlowRunID,RunID,TableName,STATUS,StartDate,TotalRec) VALUES(#[flowVars.flowRunID],#[flowVars.tableRunID],#[flowVars.insertTable],'started',getDate(),0)]]></db:parameterized-query>
+        </db:insert>
+      	  <choice doc:name="Choice">
+            <when expression="#[flowVars.dataType.equalsIgnoreCase('e-learning')]">
+                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="truncate_table">
+                    <db:parameterized-query><![CDATA[truncate table T_FACT_E_LEARNING]]></db:parameterized-query>
+                </db:update>
+                <db:select config-ref="TSA_eLearning_Select_Database_Configuration" doc:name="select_for_elearning">
+                    <db:dynamic-query><![CDATA[#[flowVars.selectQuery]]]></db:dynamic-query>
+                </db:select>
+                <logger message="===#[flowVars.count] : Fetched data for #[flowVars.insertTable] total records : #[payload.size()]" level="INFO" doc:name="Logger"/>
+                <set-variable variableName="dataSize" value="#[payload.size()]" doc:name="fetchedDataSize"/>
+                <flow-ref name="InsertDataFlow" doc:name="InsertDataFlow"/>
+                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_logTable">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET EndDate = getDate(),STATUS='completed' WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID] AND STATUS='started']]></db:parameterized-query>
+                </db:update>
+                <set-variable variableName="QueryCheckCount" value="${tsa.query.count}" doc:name="setQueryCount"/>
+                <logger message="QueryCheckCount:: #[flowVars.QueryCheckCount] in #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+                <db:select config-ref="TSA_Insert_Database_Configuration" doc:name="Check_completd_tables_in_log">
+                    <db:parameterized-query><![CDATA[select count(status) as statusCount from T_TSA_FLOW_DTL_LOG where Status != 'started' AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+                </db:select>
+                <choice doc:name="Choice">
+                    <when expression="#[payload[0].statusCount == flowVars.QueryCheckCount]">
+                         <db:select config-ref="TSA_Insert_Database_Configuration" doc:name="Database">
+	                        <db:parameterized-query><![CDATA[select tablename,error from T_TSA_FLOW_DTL_LOG where RunID = #[flowVars.tableRunID] and status='failure']]></db:parameterized-query>
+	                    </db:select>
+	                    <logger message="Failed tables #[payload]" level="INFO" doc:name="Logger"/>
+	              		<flow-ref name="processRetryOrEmailFlow" doc:name="processRetryOrEmailFlow"/>	
+                    </when>
+                    <otherwise>
+                        <logger message="Not all tables inserted!!" level="INFO" doc:name="Logger"/>
+                    </otherwise>
+                </choice>
+            </when>
+           <!--  <when expression="#[flowVars.dataType.equalsIgnoreCase('MTC')]">
+            	<choice doc:name="Choice">
+            		<when expression="#[flowVars.operationtype.equalsIgnoreCase('truncate')]">
+            			<choice doc:name="Choice">
+            				<when expression="#[flowVars.insertTable.equalsIgnoreCase('T_DIM_AUTOMATED_AUDIT_CATEGORY')]">
+                                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="truncate_table">
+                                    <db:parameterized-query><![CDATA[truncate table T_DIM_AUTOMATED_AUDIT_CATEGORY]]></db:parameterized-query>
+                                </db:update>
+                            </when>
+                            <otherwise>
+                                <logger message="No truncate" level="INFO" doc:name="Logger"/>
+                            </otherwise>
+            			</choice>
+            			<set-variable variableName="batchCount" value="#[1]" doc:name="batchCounter"/>
+                        <flow-ref name="batchselect" doc:name="batchselect"/>
+            		</when>
+            		<otherwise>
+                        <set-variable variableName="batchCount" value="#[1]" doc:name="batchCounter"/>
+                        <flow-ref name="batchselect" doc:name="batchselect"/>
+                    </otherwise>
+            	</choice>
+            </when> -->
+            <otherwise>
+                <choice doc:name="Choice">
+                    <when expression="#[flowVars.operationtype.equalsIgnoreCase('truncate')]">
+                        <choice doc:name="Choice">
+                            <when expression="#[flowVars.insertTable.equalsIgnoreCase('T_DIM_HOTEL_ROOM')]">
+                                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="truncate_table">
+                                    <db:parameterized-query><![CDATA[truncate table T_DIM_HOTEL_ROOM]]></db:parameterized-query>
+                                </db:update>
+                            </when>
+                            <when expression="#[flowVars.insertTable.equalsIgnoreCase('T_DIM_HOTEL')]">
+                                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="truncate_table">
+                                    <db:parameterized-query><![CDATA[truncate table T_DIM_HOTEL]]></db:parameterized-query>
+                                </db:update>
+                            </when>
+                            <when expression="#[flowVars.insertTable.equalsIgnoreCase('T_DIM_HOTEL_MARKET_SEGMENT')]">
+                                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="truncate_table">
+                                    <db:parameterized-query><![CDATA[truncate table T_DIM_HOTEL_MARKET_SEGMENT]]></db:parameterized-query>
+                                </db:update>
+                            </when> 
+                            <when expression="#[flowVars.insertTable.equalsIgnoreCase('T_DIM_HOTEL_PRODUCT')]">
+                                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="truncate_table">
+                                    <db:parameterized-query><![CDATA[truncate table T_DIM_HOTEL_PRODUCT]]></db:parameterized-query>
+                                </db:update>
+                            </when> 
+							<when expression="#[flowVars.insertTable.equalsIgnoreCase('T_FACT_CRM_OPPORTUNITY')]">
+                                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="truncate_table">
+                                    <db:parameterized-query><![CDATA[truncate table T_FACT_CRM_OPPORTUNITY]]></db:parameterized-query>
+                                </db:update>
+                            </when> 
+							<when expression="#[flowVars.insertTable.equalsIgnoreCase('T_DIM_USER')]">
+                                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="truncate_table">
+                                    <db:parameterized-query><![CDATA[truncate table T_DIM_USER]]></db:parameterized-query>
+                                </db:update>
+                            </when> 
+							<when expression="#[flowVars.insertTable.equalsIgnoreCase('T_FACT_USERHOTEL')]">
+                                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="truncate_table">
+                                    <db:parameterized-query><![CDATA[truncate table T_FACT_USERHOTEL]]></db:parameterized-query>
+                                </db:update>
+							</when> 
+                            <when expression="#[flowVars.insertTable.equalsIgnoreCase('T_DIM_HOTEL_CITY_AVERAGE_GROUP')]">
+                                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="truncate_table">
+                                    <db:parameterized-query><![CDATA[truncate table T_DIM_HOTEL_CITY_AVERAGE_GROUP]]></db:parameterized-query>
+                                </db:update>
+                            </when> 
+ 
+							<when expression="#[flowVars.insertTable.equalsIgnoreCase('T_DIM_AUTOMATED_AUDIT_CATEGORY')]">
+                                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="truncate_table">
+                                    <db:parameterized-query><![CDATA[truncate table T_DIM_AUTOMATED_AUDIT_CATEGORY]]></db:parameterized-query>
+                                </db:update>
+                            </when> 
+							<when expression="#[flowVars.insertTable.equalsIgnoreCase('T_FACT_AUTOMATED_AUDIT_STATUS')]">
+                                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="truncate_table">
+                                    <db:parameterized-query><![CDATA[truncate table T_FACT_AUTOMATED_AUDIT_STATUS]]></db:parameterized-query>
+                                </db:update>
+                            </when> 
+							<when expression="#[flowVars.insertTable.equalsIgnoreCase('T_FACT_HOTEL_CONTRACT')]">
+                                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="truncate_table">
+                                    <db:parameterized-query><![CDATA[truncate table T_FACT_HOTEL_CONTRACT]]></db:parameterized-query>
+                            </db:update>
+                            </when> 
+							<when expression="#[flowVars.insertTable.equalsIgnoreCase('T_FACT_HOTEL_ARRIVALS')]">
+                                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="truncate_table">
+                                    <db:parameterized-query><![CDATA[truncate table TRUNCATEDUMMY]]></db:parameterized-query>
+                            </db:update>
+                            </when> 
+							<when expression="#[flowVars.insertTable.equalsIgnoreCase('T_FACT_HOTEL_ROOM_STATISTICS')]">
+                                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="truncate_table">
+                                    <db:parameterized-query><![CDATA[truncate table TRUNCATEDUMMY]]></db:parameterized-query>
+                            </db:update>
+                            </when> 
+							<when expression="#[flowVars.insertTable.equalsIgnoreCase('T_FACT_APPOINTMENTS')]">
+                                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="truncate_table">
+                                    <db:parameterized-query><![CDATA[truncate table T_FACT_APPOINTMENTS]]></db:parameterized-query>
+                            </db:update>
+                            </when> 
+                            <otherwise>
+                                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="truncate_table">
+                                    <db:parameterized-query><![CDATA[truncate table TRUNCATEDUMMY]]></db:parameterized-query>
+                                </db:update>
+                            </otherwise>
+                        </choice>
+                        <set-variable variableName="batchCount" value="#[1]" doc:name="batchCounter"/>
+                        <flow-ref name="batchselect" doc:name="batchselect"/>
+                    </when>
+                    <otherwise>
+                        <set-variable variableName="batchCount" value="#[1]" doc:name="batchCounter"/>
+                        <flow-ref name="batchselect" doc:name="batchselect"/>
+                    </otherwise>
+                </choice>
+            </otherwise>
+        </choice>
+        <catch-exception-strategy doc:name="Catch Exception Strategy">
+            <logger message="Logger Insert into DB  end with error Exception #[exception]" level="INFO" doc:name="Logger GLTEZMPROOFFILECOPY end with error"/>
+            <set-payload value="Exception in TSA_BI_REPORTS -- #[exception.cause]  #[exception]" doc:name="Set Payload"/>
+            <logger message="Exception::: #[payload]" level="INFO" doc:name="Logger GLTEZMPROOFFILECOPY end with error"/>
+            <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET STATUS='Failure',ERROR= #[payload], EndDate = getDate() WHERE TableName = #[flowVars.insertTable] AND STATUS='started']]></db:parameterized-query>
+            </db:update>
+        </catch-exception-strategy>
+    </flow>
+   <flow name="InsertDataFlow" processingStrategy="synchronous">
+      	  <choice doc:name="Choice">
+            <when expression="#[flowVars.count ==1]">
+                <db:insert config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="insert_data">
+                    <db:parameterized-query><![CDATA[${tsa.insert.1}]]></db:parameterized-query>
+                </db:insert>
+              <logger message="batch insertin done for  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET TotalRec = #[flowVars.dataSize]+(select TotalRec from T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable]  AND RunID = #[flowVars.tableRunID]) WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+                </db:update>
+            </when>
+            <when expression="#[flowVars.count ==2]">
+                <db:insert config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="insert_data">
+                    <db:parameterized-query><![CDATA[${tsa.insert.2}]]></db:parameterized-query>
+                </db:insert>
+                <logger message="batch insertin done for  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+              	<db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET TotalRec = #[flowVars.dataSize]+(select TotalRec from T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable]  AND RunID = #[flowVars.tableRunID]) WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+              	</db:update>
+            </when>
+            <when expression="#[flowVars.count ==3]">
+                <db:insert config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="insert_data">
+                    <db:parameterized-query><![CDATA[${tsa.insert.3}]]></db:parameterized-query>
+                </db:insert>
+                <logger message="batch insertin done for  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+              	<db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET TotalRec = #[flowVars.dataSize]+(select TotalRec from T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable]  AND RunID = #[flowVars.tableRunID]) WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+              	</db:update>
+            </when>
+            <when expression="#[flowVars.count ==4]">
+                <db:insert config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="insert_data">
+                    <db:parameterized-query><![CDATA[${tsa.insert.4}]]></db:parameterized-query>
+                </db:insert>
+                <logger message="batch insertin done for  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET TotalRec = #[flowVars.dataSize]+(select TotalRec from T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable]  AND RunID = #[flowVars.tableRunID]) WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+                </db:update>
+            </when>
+            <when expression="#[flowVars.count ==5]">
+                <db:insert config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="insert_data">
+                    <db:parameterized-query><![CDATA[${tsa.insert.5}]]></db:parameterized-query>
+                </db:insert>
+                <logger message="batch insertin done for  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+              	<db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET TotalRec = #[flowVars.dataSize]+(select TotalRec from T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable]  AND RunID = #[flowVars.tableRunID]) WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+              	</db:update>
+            </when>
+            <when expression="#[flowVars.count ==6]">
+                <db:insert config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="insert_data">
+                    <db:parameterized-query><![CDATA[${tsa.insert.6}]]></db:parameterized-query>
+                </db:insert>
+                <logger message="batch insertin done for  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+              	<db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET TotalRec = #[flowVars.dataSize]+(select TotalRec from T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable]  AND RunID = #[flowVars.tableRunID]) WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+              	</db:update>
+            </when>
+            <when expression="#[flowVars.count ==7]">
+           	   <!-- <component doc:name="Java" class="tsa_bi_reports.InsertIntoFactTable"/>  -->
+                <db:insert config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="insert_data">
+                    <db:parameterized-query><![CDATA[${tsa.insert.7}]]></db:parameterized-query>
+                </db:insert>
+                <logger message="batch insertin done for  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET TotalRec = #[flowVars.dataSize]+(select TotalRec from T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable]  AND RunID = #[flowVars.tableRunID]) WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+                </db:update>
+            </when>
+            <when expression="#[flowVars.count ==8]">
+                <db:insert config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="insert_data">
+                    <db:parameterized-query><![CDATA[${tsa.insert.8}]]></db:parameterized-query>
+                </db:insert>
+               <logger message="batch insertin done for  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET TotalRec = #[flowVars.dataSize]+(select TotalRec from T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable]  AND RunID = #[flowVars.tableRunID]) WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+                </db:update>
+            </when>
+            <when expression="#[flowVars.count ==9]">
+                <db:insert config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="insert_data">
+                    <db:parameterized-query><![CDATA[${tsa.insert.9}]]></db:parameterized-query>
+                </db:insert>
+                <logger message="batch insertin done for  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET TotalRec = #[flowVars.dataSize]+(select TotalRec from T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable]  AND RunID = #[flowVars.tableRunID]) WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+                </db:update>
+            </when>
+            <when expression="#[flowVars.count ==10]">
+                <db:insert config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="insert_data">
+                    <db:parameterized-query><![CDATA[${tsa.insert.10}]]></db:parameterized-query>
+                </db:insert>
+                <logger message="batch insertin done for  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET TotalRec = #[flowVars.dataSize]+(select TotalRec from T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable]  AND RunID = #[flowVars.tableRunID]) WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+                </db:update>
+            </when>
+            <when expression="#[flowVars.count ==11]">
+           	  <!--  <component doc:name="Java" class="tsa_bi_reports.InsertIntoFactTable"/>  -->
+                <db:insert config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="insert_data">
+                    <db:parameterized-query><![CDATA[${tsa.insert.11}]]></db:parameterized-query>
+                </db:insert>
+               <logger message="batch insertin done for  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET TotalRec = #[flowVars.dataSize]+(select TotalRec from T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable]  AND RunID = #[flowVars.tableRunID]) WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+                </db:update>
+            </when>
+            <when expression="#[flowVars.count ==12]">
+                <db:insert config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="insert_data">
+                    <db:parameterized-query><![CDATA[${tsa.insert.12}]]></db:parameterized-query>
+                </db:insert>
+                <logger message="batch insertin done for  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+              	<db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET TotalRec = #[flowVars.dataSize]+(select TotalRec from T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable]  AND RunID = #[flowVars.tableRunID]) WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+              	</db:update>
+            </when>
+            <when expression="#[flowVars.count ==13]">
+                <db:insert config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="insert_data">
+                    <db:parameterized-query><![CDATA[${tsa.insert.13}]]></db:parameterized-query>
+                </db:insert>
+                <logger message="batch insertin done for  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET TotalRec = #[flowVars.dataSize]+(select TotalRec from T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable]  AND RunID = #[flowVars.tableRunID]) WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+                </db:update>
+               <!--  <db:execute-ddl config-ref="TSA_Select_Database_Configuration" doc:name="drop_temp_table">
+                    <db:dynamic-query><![CDATA[#[flowVars.dropTable]]]></db:dynamic-query>
+                </db:execute-ddl> -->
+            </when>
+            <when expression="#[flowVars.count ==14]">
+                <db:insert config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="insert_data">
+                    <db:parameterized-query><![CDATA[${tsa.insert.14}]]></db:parameterized-query>
+                </db:insert>
+                <logger message="batch insertin done for  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET TotalRec = #[flowVars.dataSize]+(select TotalRec from T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable]  AND RunID = #[flowVars.tableRunID]) WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+                </db:update>
+            </when>
+            <when expression="#[flowVars.count ==15]">
+                <db:insert config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="insert_data">
+                    <db:parameterized-query><![CDATA[${tsa.insert.15}]]></db:parameterized-query>
+                </db:insert>
+                <logger message="batch insertin done for  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET TotalRec = #[flowVars.dataSize]+(select TotalRec from T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable]  AND RunID = #[flowVars.tableRunID]) WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+                </db:update>
+            </when>
+            <when expression="#[flowVars.count ==16]">
+                <db:insert config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="insert_data">
+                    <db:parameterized-query><![CDATA[${tsa.insert.16}]]></db:parameterized-query>
+                </db:insert>
+                <logger message="batch insertin done for  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET TotalRec = #[flowVars.dataSize]+(select TotalRec from T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable]  AND RunID = #[flowVars.tableRunID]) WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+                </db:update>
+               <!--  <db:execute-ddl config-ref="TSA_Select_Database_Configuration" doc:name="drop_temp_table">
+                    <db:dynamic-query><![CDATA[#[flowVars.dropTable]]]></db:dynamic-query>
+                </db:execute-ddl> -->
+            </when>		
+             <when expression="#[flowVars.count ==17]">
+                <db:insert config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="insert_data">
+                    <db:parameterized-query><![CDATA[${tsa.insert.17}]]></db:parameterized-query>
+                </db:insert>
+                <logger message="batch insertin done for  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET TotalRec = #[flowVars.dataSize]+(select TotalRec from T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable]  AND RunID = #[flowVars.tableRunID]) WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+                </db:update>
+               <!--  <db:execute-ddl config-ref="TSA_Select_Database_Configuration" doc:name="drop_temp_table">
+                    <db:dynamic-query><![CDATA[#[flowVars.dropTable]]]></db:dynamic-query>
+                </db:execute-ddl> -->
+            </when>				
+			<when expression="#[flowVars.count ==18]">
+                <db:insert config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="insert_data">
+                    <db:parameterized-query><![CDATA[${tsa.insert.18}]]></db:parameterized-query>
+                </db:insert>
+                <logger message="batch insertin done for  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET TotalRec = #[flowVars.dataSize]+(select TotalRec from T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable]  AND RunID = #[flowVars.tableRunID]) WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+                </db:update>
+               <!--  <db:execute-ddl config-ref="TSA_Select_Database_Configuration" doc:name="drop_temp_table">
+                    <db:dynamic-query><![CDATA[#[flowVars.dropTable]]]></db:dynamic-query>
+                </db:execute-ddl> -->
+            </when>					
+			<when expression="#[flowVars.count ==19]">
+                <db:insert config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="insert_data">
+                    <db:parameterized-query><![CDATA[${tsa.insert.19}]]></db:parameterized-query>
+                </db:insert>
+                <logger message="batch insertin done for  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET TotalRec = #[flowVars.dataSize]+(select TotalRec from T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable]  AND RunID = #[flowVars.tableRunID]) WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+                </db:update>
+               <!--  <db:execute-ddl config-ref="TSA_Select_Database_Configuration" doc:name="drop_temp_table">
+                    <db:dynamic-query><![CDATA[#[flowVars.dropTable]]]></db:dynamic-query>
+                </db:execute-ddl> -->
+            </when>		
+            <when expression="#[flowVars.count ==20]">
+                <db:insert config-ref="TSA_Insert_Database_Configuration" bulkMode="true" doc:name="insert_data">
+                    <db:parameterized-query><![CDATA[${tsa.insert.20}]]></db:parameterized-query>
+                </db:insert>
+                <logger message="batch insertin done for  #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET TotalRec = #[flowVars.dataSize]+(select TotalRec from T_TSA_FLOW_DTL_LOG WHERE TableName = #[flowVars.insertTable]  AND RunID = #[flowVars.tableRunID]) WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+                </db:update>
+               <!--  <db:execute-ddl config-ref="TSA_Select_Database_Configuration" doc:name="drop_temp_table">
+                    <db:dynamic-query><![CDATA[#[flowVars.dropTable]]]></db:dynamic-query>
+                </db:execute-ddl> -->
+            </when>				
+	            <otherwise>
+                <logger message="default insert logger" level="INFO" doc:name="Logger"/>
+            </otherwise>
+        </choice>
+        <logger message="updated log table" level="INFO" doc:name="Logger"/>
+        <catch-exception-strategy doc:name="Catch Exception Strategy">
+			<logger message="Logger Insert into DB  end with error Exception #[exception]" level="INFO" doc:name="Logger GLTEZMPROOFFILECOPY end with error"/>
+		 	<set-payload value="Exception in TSA_BI_REPORTS -- #[exception.cause]  #[exception]" doc:name="Set Payload" />
+			<logger message="Exception::: #[payload]" level="INFO" doc:name="Logger GLTEZMPROOFFILECOPY end with error"/>
+		 	<db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET STATUS='Failure',ERROR= #[payload], EndDate = getDate() WHERE TableName = #[flowVars.insertTable] AND STATUS='started' AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+         	</db:update>
+		</catch-exception-strategy>
+    </flow>
+    <flow name="insertOrUpdateLogTbl">
+        <choice doc:name="Choice">
+            <when expression="#[flowVars.logOperation == 1]">
+                <logger message="In log table insert operatipon" level="INFO" doc:name="Logger"/>
+                <db:select config-ref="TSA_Insert_Database_Configuration" doc:name="Database">
+                    <db:parameterized-query><![CDATA[select count(TableName) as tableNameCount from T_TSA_FLOW_DTL_LOG where TableName = #[flowVars.insertTable]]]></db:parameterized-query>
+                </db:select>
+                <choice doc:name="Choice">
+                    <when expression="#[payload[0].tableNameCount ==0]">
+                        <db:insert config-ref="TSA_Insert_Database_Configuration" doc:name="insert_date_into_log">
+                            <db:parameterized-query><![CDATA[INSERT INTO T_TSA_FLOW_DTL_LOG(TableName,STATUS,TOTALRECSINSERTED) VALUES(#[flowVars.insertTable],'started',0)]]></db:parameterized-query>
+                        </db:insert>
+                    </when>
+                    <otherwise>
+                        <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="Database">
+                            <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET STATUS = 'started',TOTALRECSINSERTED = 0, Error= NULL,Date= NULL WHERE TableName = #[flowVars.insertTable]]]></db:parameterized-query>
+                        </db:update>
+                    </otherwise>
+                </choice>
+            </when>
+            <otherwise>
+                <logger message="in log table update operation" level="INFO" doc:name="Logger"/>
+                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_date">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET STATUS = 'started',TOTALRECSINSERTED = 0, Error=NULL,Date=NULL  WHERE TableName = #[flowVars.insertTable]]]></db:parameterized-query>
+                </db:update>
+            </otherwise>
+        </choice>
+    </flow>
+    <flow name="batchselect" processingStrategy="synchronous">
+        <component class="tsa_bi_reports.GetLimitAndOffset" doc:name="setLimitOffsetInQuery"/>
+        <logger message=" #[flowVars.insertTable] : select Query with offAnd Limit for the table  --------------#[flowVars.selectQueryWithLimit]" level="INFO" doc:name="Logger"/>
+        <choice doc:name="Choice">
+            <when expression="#[flowVars.dataBaseType.equalsIgnoreCase('MYS')]">
+                <db:select config-ref="MySQL_Configuration" doc:name="MySQL_featch_data">
+                    <db:dynamic-query><![CDATA[#[flowVars.selectQueryWithLimit]]]></db:dynamic-query>
+                </db:select>
+            </when>
+            <otherwise>
+                <db:select config-ref="TSA_Select_Database_Configuration" doc:name="fetch_data">
+                    <db:dynamic-query><![CDATA[#[flowVars.selectQueryWithLimit]]]></db:dynamic-query>
+                </db:select>
+            </otherwise>
+        </choice>
+        <logger message="===#[flowVars.count] : Fetched data for #[flowVars.insertTable] total records : #[payload.size()] " level="INFO" doc:name="Logger"/>
+        <set-variable variableName="dataSize" value="#[payload.size()]" doc:name="fetchedDataSize"/>
+        <logger message="data fetched for batch : #[flowVars.batchCount]" level="INFO" doc:name="Logger"/>
+        <choice doc:name="Choice">
+            <when expression="#[flowVars.dataSize &gt; 0]">
+                <flow-ref name="InsertDataFlow" doc:name="InsertDataFlow"/>
+                <set-variable variableName="batchCount" value="#[Integer.parseInt(flowVars.batchCount)+1]" doc:name="resetBatchCounter"/>
+                <set-variable variableName="offset" value="#[Integer.parseInt(flowVars.offset) + Integer.parseInt(flowVars.limit)]" doc:name="resetOffset"/>
+                <logger message="#[flowVars.batchCount] offset:#[flowVars.offset]" level="INFO" doc:name="Logger"/>
+                <flow-ref name="batchselect" doc:name="batchselect"/>
+            </when>
+            <otherwise>
+                <logger message="In last batch of insertion of #[flowVars.insertTable]" level="INFO" doc:name="In last batch of insertion"/>
+                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_logTable">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET EndDate = getDate(),STATUS='completed' WHERE TableName = #[flowVars.insertTable] AND RunID = #[flowVars.tableRunID]  AND STATUS='started']]></db:parameterized-query>
+                </db:update>
+                <set-variable variableName="QueryCheckCount" value="${tsa.query.count}" doc:name="setQueryCount"/>
+	            <logger message="QueryCheckCount:: #[flowVars.QueryCheckCount] in #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+				<db:select config-ref="TSA_Insert_Database_Configuration"
+					doc:name="Check_completd_records_in_bi_extract_table">
+                    <db:parameterized-query><![CDATA[SELECT MAX(CreatedDate) AS maxCreatedDate FROM [T_DIM_BI_EXTRACT] WHERE destinationtable=#[flowVars.insertTable] and Exists (select
+ * from [T_TSA_FLOW_DTL_LOG]
+where runid=#[flowVars.tableRunID] and tablename=#[flowVars.insertTable] and status='completed')]]></db:parameterized-query>
+                </db:select>
+              <!--   <logger message="Maxdate payload #[payload] [payload.maxCreatedDate] #[payload.maxCreatedDate] [payload.get(0).maxCreatedDate] #[payload.get(0).maxCreatedDate]" level="INFO" doc:name="Logger"/>
+				 --><set-variable variableName="maxCreatedDateForUpdate" doc:name="maxCreatedDateForUpdate" value="#[payload.get(0).maxCreatedDate]" />
+                <logger message="[flowVars.maxCreatedDateForUpdate] #[flowVars.maxCreatedDateForUpdate]" level="INFO" doc:name="Logger1" />
+                <db:update config-ref="TSA_Select_Database_Configuration" doc:name="Update_completd_flag_in_aps_extract_table" bulkMode="true">
+                    <db:parameterized-query><![CDATA[update [T_DIM_BI_EXTRACT] set CompletionFlag=1, CompletedDate=GETDATE() WHERE DestinationTable=#[flowVars.insertTable] and CreatedDate<#[flowVars.maxCreatedDateForUpdate] and CompletionFlag=0]]></db:parameterized-query>
+                </db:update>
+                <db:select config-ref="TSA_Insert_Database_Configuration" doc:name="Check_completd_tables_in_log">
+                    <db:parameterized-query><![CDATA[select count(status) as statusCount from T_TSA_FLOW_DTL_LOG where Status != 'started' AND RunID = #[flowVars.tableRunID]]]></db:parameterized-query>
+                </db:select>
+                <choice doc:name="Choice">
+                    <when expression="#[payload[0].statusCount == flowVars.QueryCheckCount]">
+						<db:select config-ref="TSA_Insert_Database_Configuration" doc:name="Database">
+	                        <db:parameterized-query><![CDATA[select tablename,error from T_TSA_FLOW_DTL_LOG where RunID = #[flowVars.tableRunID] and status='failure']]></db:parameterized-query>
+	                    </db:select>
+	                    <logger message="Failed tables #[payload]" level="INFO" doc:name="Logger"/>
+	              		<flow-ref name="processRetryOrEmailFlow" doc:name="processRetryOrEmailFlow"/>	          
+	                </when>
+                    <otherwise>
+                        <logger message="In  #[flowVars.insertTable] ---- Not all tables inserted!!" level="INFO" doc:name="Logger"/>
+                    </otherwise>
+                </choice>
+            </otherwise>
+        </choice>
+    </flow>
+    <flow name="E-learingBatchSelect">
+        <component class="tsa_bi_reports.GetLimitAndOffset" doc:name="setLimitOffsetInQuery"/>
+        <db:select config-ref="TSA_eLearning_Select_Database_Configuration" doc:name="select_for_elearning">
+            <db:dynamic-query><![CDATA[#[flowVars.selectQuery]]]></db:dynamic-query>
+        </db:select>
+        <logger message="===#[flowVars.count] : Fetched data for #[flowVars.insertTable] total records : #[payload.size()]" level="INFO" doc:name="Logger"/>
+        <set-variable variableName="dataSize" value="#[payload.size()]" doc:name="fetchedDataSize"/>
+        <choice doc:name="Choice">
+            <when expression="#[flowVars.dataSize &gt; 0]">
+                <flow-ref name="InsertDataFlow" doc:name="InsertDataFlow"/>
+                <set-variable variableName="batchCount" value="#[Integer.parseInt(flowVars.batchCount)+1]" doc:name="resetBatchCounter"/>
+                <set-variable variableName="offset" value="#[Integer.parseInt(flowVars.offset) + Integer.parseInt(flowVars.limit)]" doc:name="resetOffset"/>
+                <logger message="#[flowVars.batchCount] offset:#[flowVars.offset]" level="INFO" doc:name="Logger"/>
+                <flow-ref name="E-learingBatchSelect" doc:name="E-learingBatchSelect"/>
+            </when>
+            <otherwise>
+                <logger message="In last batch of insertion of #[flowVars.insertTable]" level="INFO" doc:name="In last batch of insertion"/>
+                <db:update config-ref="TSA_Insert_Database_Configuration" doc:name="Database">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_DTL_LOG SET DATE = getDate()
+						,STATUS='completed' WHERE TableName = #[flowVars.insertTable]]]></db:parameterized-query>
+                </db:update>
+                 <set-variable variableName="QueryCheckCount" value="${tsa.query.count}" doc:name="setQueryCount"/>
+                <logger message="QueryCheckCount:: #[flowVars.QueryCheckCount] in #[flowVars.insertTable]" level="INFO" doc:name="Logger"/>
+                <db:select config-ref="TSA_Insert_Database_Configuration" doc:name="Check_completd_tables_in_log">
+                    <db:parameterized-query><![CDATA[select count(status) as statusCount from T_TSA_FLOW_DTL_LOG where Status = 'started']]></db:parameterized-query>
+                </db:select>
+                <choice doc:name="Choice">
+                    <when expression="#[payload[0].statusCount == flowVars.QueryCheckCount]">
+                         <db:select config-ref="TSA_Insert_Database_Configuration" doc:name="Database">
+	                        <db:parameterized-query><![CDATA[select tablename,error from T_TSA_FLOW_DTL_LOG where RunID = #[flowVars.tableRunID] and status='failure']]></db:parameterized-query>
+	                    </db:select>
+	                    <logger message="Failed tables #[payload]" level="INFO" doc:name="Logger"/>
+	              		<flow-ref name="processRetryOrEmailFlow" doc:name="processRetryOrEmailFlow"/>	
+                    </when>
+                    <otherwise>
+                        <logger message="In #[flowVars.insertTable]  -- Not all tables inserted!!" level="INFO" doc:name="Logger"/>
+                    </otherwise>
+                </choice>
+            </otherwise>
+        </choice>
+    </flow>
+    <flow name="processRetryOrEmailFlow">
+    	<choice doc:name="Choice">
+            <when expression="#[payload.size()>0]">
+            	<db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_flow_logTable">
+                    <db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_LOG SET FlowEndDate = getDate(),STATUS='failure' WHERE FlowName = 'tsa_db_batch1_insertionFlow' AND RunID = #[flowVars.flowRunID]]]></db:parameterized-query>
+                </db:update>
+                <db:select config-ref="TSA_Insert_Database_Configuration" doc:name="Database">
+                                    <db:parameterized-query><![CDATA[select count(runid) as failureCount from T_TSA_FLOW_LOG where flowname='tsa_db_batch1_insertionFlow' and status='failure' and cast(flowstartdate as Date) = cast(getdate() as Date)]]></db:parameterized-query>
+                </db:select>
+                <logger message="Failure count : #[payload[0].failureCount]" level="INFO" doc:name="Logger"/>
+         		<choice doc:name="Choice">
+			     	<when expression="#[payload[0].failureCount>3]">
+						<db:select config-ref="TSA_Insert_Database_Configuration" doc:name="Database">
+		        			<db:parameterized-query><![CDATA[select tablename,error,convert(varchar(5),DateDiff(s, startDate, EndDate)/3600)+' hours, '+convert(varchar(5),DateDiff(s, startDate, EndDate)%3600/60)+' minutes, '+convert(varchar(5),(DateDiff(s, startDate, EndDate)%60))+' seconds' as [duration] from T_TSA_FLOW_DTL_LOG where RunID = #[flowVars.tableRunID] and status='failure']]></db:parameterized-query>
+		                 </db:select>
+		              	<logger message="Failed tables #[payload]" level="INFO" doc:name="Logger"/>
+		              
+		                <parse-template location="${tsa.file.email.location}/email_content.html" doc:name="Parse Template"/>
+		                <logger message="***********content************#[payload]" level="INFO" doc:name="Logger"/>
+		                <smtp:outbound-endpoint host="${tsa.email.host}" port="${tsa.email.port}" user="${tsa.email.username}" password="${tsa.email.password}" to="${tsa.email.to}" from="${tsa.email.from}" subject="${tsa.email.subject}" responseTimeout="10000" doc:name="SMTP" mimeType="text/html" connector-ref="SMTP">
+		         			<property key="mail.smtp.starttls.enable" value="true"/>
+		     			</smtp:outbound-endpoint>
+		                <logger message="========Email sent=============" level="INFO" doc:name="logger"/>	
+		            </when>
+		           	<otherwise>
+		           		<component class="tsa_bi_reports.CopyFiles" doc:name="Java"/>
+		           		<logger message="==========Retry started===========" level="INFO" doc:name="Logger"/>
+		           	</otherwise>
+		       </choice>   
+            </when>
+ 			<otherwise>
+				<logger message="Batch completed successfully." level="INFO" doc:name="Logger" />
+				<db:update config-ref="TSA_Insert_Database_Configuration" doc:name="update_flow_logTable">
+					<db:parameterized-query><![CDATA[UPDATE T_TSA_FLOW_LOG SET FlowEndDate = getDate(),STATUS='completed' WHERE FlowName = 'tsa_db_batch1_insertionFlow' AND RunID = #[flowVars.flowRunID]]]></db:parameterized-query>
+				</db:update>
+				<logger message="==========job ended===========" level="INFO" doc:name="Logger" />
+			</otherwise>
+
+	     </choice>
+    </flow>
+</mule>
